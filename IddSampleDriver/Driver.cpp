@@ -22,17 +22,58 @@ using namespace std;
 using namespace Microsoft::IndirectDisp;
 using namespace Microsoft::WRL;
 
+// If defined EDID_LESS, we create edid-less monitors
+// Also, If IDD_SAMPLE_MONITOR_COUNT is larger than sizeof s_SampleDefaultModes, we will create edid-less monitors
+#define EDID_LESS
+
 #pragma region SampleMonitors
 
-static constexpr DWORD IDD_SAMPLE_MONITOR_COUNT = 3; // If monitor count > ARRAYSIZE(s_SampleMonitors), we create edid-less monitors
+static constexpr DWORD IDD_SAMPLE_MONITOR_COUNT = 1;
+
+static const struct {
+    DWORD Width;
+    DWORD Height;
+} s_SampleResolutionList[] = {
+    { 640,   480 },
+    { 800,   600 },
+    { 1024,  768 },
+    { 1280,  720 },
+    { 1280,  768 },
+    { 1280,  800 },
+    { 1280, 1024 },
+    { 1360,  768 },
+    { 1366,  768 },
+    { 1600, 1200 },
+    { 1680, 1050 },
+    { 1920, 1080 },
+    { 1920, 1200 },
+    { 2048, 1536 },
+    { 2560, 1440 },
+    { 2560, 1600 },
+    { 3840, 2160 },
+};
+
+static const DWORD s_SampleVSyncList[] = 
+{
+    60, 165, 144, 120, 100, 75, 82,
+};
 
 // Default modes reported for edid-less monitors. The first mode is set as preferred
 static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultModes[] = 
 {
-    { 1920, 1080, 60 },
-    { 1600,  900, 60 },
-    { 1024,  768, 75 },
+    { 2560, 1440, 165 },
+    { 2560, 1440, 144 },
+    { 2560, 1440, 120 },
+    { 2560, 1440,  60 },
+    { 1920, 1080, 165 },
+    { 1920, 1080, 144 },
+    { 1920, 1080, 120 },
+    { 1920, 1080,  60 },
+    { 1600,  900,  60 },
+    { 1024,  768,  75 },
 };
+
+#ifndef EDID_LESS
 
 // FOR SAMPLE PURPOSES ONLY, Static info about monitors that will be reported to OS
 static const struct IndirectSampleMonitor s_SampleMonitors[] =
@@ -74,6 +115,7 @@ static const struct IndirectSampleMonitor s_SampleMonitors[] =
         0
     }
 };
+#endif // EDID_LESS
 
 #pragma endregion
 
@@ -557,6 +599,11 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 
     MonitorInfo.MonitorDescription.Size = sizeof(MonitorInfo.MonitorDescription);
     MonitorInfo.MonitorDescription.Type = IDDCX_MONITOR_DESCRIPTION_TYPE_EDID;
+
+#ifdef EDID_LESS
+        MonitorInfo.MonitorDescription.DataSize = 0;
+        MonitorInfo.MonitorDescription.pData = nullptr;
+#else
     if (ConnectorIndex >= ARRAYSIZE(s_SampleMonitors))
     {
         MonitorInfo.MonitorDescription.DataSize = 0;
@@ -567,6 +614,7 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
         MonitorInfo.MonitorDescription.DataSize = IndirectSampleMonitor::szEdidBlock;
         MonitorInfo.MonitorDescription.pData = const_cast<BYTE*>(s_SampleMonitors[ConnectorIndex].pEdidBlock);
     }
+#endif // EDID_LESS
 
     // ==============================
     // TODO: The monitor's container ID should be distinct from "this" device's container ID if the monitor is not
@@ -679,6 +727,12 @@ NTSTATUS IddSampleParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTION
     // this sample driver, we hard-code the EDID, so this function can generate known modes.
     // ==============================
 
+#ifdef EDID_LESS
+    UNREFERENCED_PARAMETER(pInArgs);
+    UNREFERENCED_PARAMETER(pOutArgs);
+
+    return STATUS_NOT_IMPLEMENTED;
+#else
     pOutArgs->MonitorModeBufferOutputCount = IndirectSampleMonitor::szModeList;
 
     if (pInArgs->MonitorModeBufferInputCount < IndirectSampleMonitor::szModeList)
@@ -721,6 +775,7 @@ NTSTATUS IddSampleParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTION
         // This EDID block does not belong to the monitors we reported earlier
         return STATUS_INVALID_PARAMETER;
     }
+#endif // EDID_LESS
 }
 
 _Use_decl_annotations_
@@ -733,6 +788,7 @@ NTSTATUS IddSampleMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject, const IDAR
     // Drivers should report modes that are guaranteed to be supported by the transport protocol and by nearly all
     // monitors (such 640x480, 800x600, or 1024x768). If the driver has access to monitor modes from a descriptor other
     // than an EDID, those modes would also be reported here.
+    // This should never be called since we create a single monitor with a known EDID in this sample driver.
     // ==============================
 
     if (pInArgs->DefaultMonitorModeBufferInputCount == 0)
@@ -769,16 +825,17 @@ NTSTATUS IddSampleMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_IN_
     // monitor's descriptor and instead are based on the static processing capability of the device. The OS will
     // report the available set of modes for a given output as the intersection of monitor modes with target modes.
 
-    TargetModes.push_back(CreateIddCxTargetMode(3840, 2160, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 144));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 90));
-    TargetModes.push_back(CreateIddCxTargetMode(2560, 1440, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 144));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 90));
-    TargetModes.push_back(CreateIddCxTargetMode(1920, 1080, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1600,  900, 60));
-    TargetModes.push_back(CreateIddCxTargetMode(1024,  768, 75));
-    TargetModes.push_back(CreateIddCxTargetMode(1024,  768, 60));
+    for (DWORD ResolutionIndex = 0; ResolutionIndex < ARRAYSIZE(s_SampleResolutionList); ResolutionIndex++)
+    {
+        for (DWORD VSyncIndex = 0; VSyncIndex < ARRAYSIZE(s_SampleVSyncList); VSyncIndex++)
+        {
+            TargetModes.push_back(CreateIddCxTargetMode(
+                s_SampleResolutionList[ResolutionIndex].Width,
+                s_SampleResolutionList[ResolutionIndex].Height,
+                s_SampleVSyncList[VSyncIndex])
+            );
+        }
+    }
 
     pOutArgs->TargetModeBufferOutputCount = (UINT) TargetModes.size();
 
