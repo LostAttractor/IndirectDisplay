@@ -24,7 +24,7 @@ using namespace Microsoft::WRL;
 
 // If defined EDID_LESS, we create edid-less monitors
 // Also, If IDD_SAMPLE_MONITOR_COUNT is larger than sizeof s_SampleDefaultModes, we will create edid-less monitors
-#define EDID_LESS
+// #define EDID_LESS
 
 #pragma region SampleMonitors
 
